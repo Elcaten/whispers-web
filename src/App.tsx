@@ -1,47 +1,74 @@
-import React, { Fragment, useEffect, useRef, useState } from "react";
+import React, { Fragment, useState } from "react";
 import {
-  Subject,
   buffer,
   concatMap,
   filter,
   map,
+  mergeMap,
+  repeat,
+  scan,
   startWith,
   switchMap,
+  takeUntil,
   withLatestFrom,
 } from "rxjs";
-import { getEncoder } from "./useWhisper/getEncoder";
-import { getListenerAndEvents } from "./useWhisper/getListenerAndEvents";
-import { getRecorderAndBlobs } from "./useWhisper/getRecorderAndBlobs";
-import { getStream } from "./useWhisper/getStream";
-import { getWhisper } from "./useWhisper/getWhisper";
-import { getAudioPlayer } from "./utils/getAudioPlayer";
-import { shareLatest } from "./utils/shareLatest";
-
-type TranscriptionByDate = Map<Date, string>
+import { createEncoder } from "./audio/createEncoder";
+import { fetchTranscription } from "./openAi/fetchTranscription";
+import { fetchTranslation } from "./openAi/fetchTranslation";
+import { getAudioPlayer } from "./audio/getAudioPlayer";
+import { shareLatest } from "./rxjs/shareLatest";
+import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
+import { useSubject } from "./rxjs/useSubject";
+import { useSubscriptions } from "./rxjs/useSubscriptions";
+import { getListenerEvents } from "./audio/getListenerEvents";
+import { createListener } from "./audio/createListener";
+import { createMediaStream } from "./audio/createMediaStream";
+import { getRecorderAndBlobs } from "./audio/getRecorderAndBlobs";
+import { useObservable } from "./rxjs/useObservable";
+import { API_KEY } from "./config";
 
 export default function App() {
-  const [transcriptions, setTranscriptions] = useState<TranscriptionByDate>(new Map());
-  const chunks$ = useRef(new Map<Date, Blob>)
-  const language$ = useRef(new Subject<"en" | "es">());
-  const startRecordingClick$ = useRef(new Subject<void>());
-  const stopRecordingClick$ = useRef(new Subject<void>());
-  const playClick$ = useRef(new Subject<Date>());
+  const [interval$, emitInterval, interval] = useBehaviorSubject(50);
+  const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
+  const [language$, emitLanguage, language] = useBehaviorSubject<"en" | "es">(
+    "es"
+  );
+  const [startRecordingClick$, emitStartRecording] = useSubject<void>();
+  const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
+  const [playClick$, emitPlayClick] = useSubject<Date>();
 
-  useEffect(() => {
-    const stream$ = startRecordingClick$.current.pipe(
-      switchMap(() => getStream()),
+  const enableTranslation$ = language$.pipe(
+    map((language) => language !== "en"),
+    shareLatest()
+  );
+  const enableTranslation = useObservable(enableTranslation$)
+
+  const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(
+    new Map()
+  );
+  const [translationByDate, setTranslations] = useState<Map<Date, string>>(
+    new Map()
+  );
+
+  useSubscriptions(() => {
+    const stream$ = startRecordingClick$.pipe(
+      switchMap(() => createMediaStream()),
       shareLatest()
     );
-    const listenerAndEvents$ = stream$.pipe(
-      switchMap((stream) => getListenerAndEvents({ stream })),
+
+    const listener$ = stream$.pipe(
+      withLatestFrom(sensetivity$, interval$),
+      switchMap(([stream, sensetivity, interval]) =>
+        createListener({ stream, sensetivity, interval })
+      ),
       shareLatest()
     );
-    const listener$ = listenerAndEvents$.pipe(map(({ listener }) => listener));
-    const stoppedSpeaking$ = listenerAndEvents$.pipe(
-      switchMap(({ events$ }) => events$),
+    const stoppedSpeaking$ = listener$.pipe(
+      switchMap((listener) => getListenerEvents({ listener })),
       filter((event) => event === "stoppedSpeaking"),
       shareLatest()
     );
+
     const recorderWithData$ = stream$.pipe(
       switchMap((stream) => getRecorderAndBlobs(stream)),
       shareLatest()
@@ -54,8 +81,9 @@ export default function App() {
       switchMap(({ blobs$ }) => blobs$),
       shareLatest()
     );
+
     const encoder$ = recorder$.pipe(
-      switchMap(() => getEncoder()),
+      switchMap(() => createEncoder()),
       shareLatest()
     );
     const encodedBlobs$ = recorderData$.pipe(
@@ -84,18 +112,38 @@ export default function App() {
       }),
       shareLatest()
     );
+    const chunkByDate$ = encodedData$.pipe(
+      scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>())
+    );
 
     const transcriptions$ = encodedData$.pipe(
-      withLatestFrom(language$.current.pipe(startWith("en" as const))),
-      concatMap(([{ file, date }, language]) =>
-        getWhisper(file, { language }).then((text) => ({ text, date }))
+      withLatestFrom(language$.pipe(startWith("en" as const))),
+      mergeMap(([{ file, date }, language]) =>
+        fetchTranscription({ file, language, apiKey: API_KEY }).then((text) => ({ text, date }))
+      ),
+      scan(
+        (acc, { text, date }) => acc.set(date, text),
+        new Map<Date, string>()
       ),
       shareLatest()
     );
 
-    const subscriptions = [
+    const translations$ = encodedData$.pipe(
+      withLatestFrom(enableTranslation$),
+      filter(([_, enableTranslation]) => enableTranslation),
+      mergeMap(([{ file, date }]) =>
+        fetchTranslation({ file, apiKey: API_KEY }).then((text) => ({ text, date }))
+      ),
+      scan(
+        (acc, { text, date }) => acc.set(date, text),
+        new Map<Date, string>()
+      ),
+      shareLatest()
+    );
+
+    return [
       recorder$.subscribe((value) => value.startRecording()),
-      stopRecordingClick$.current
+      stopRecordingClick$
         .pipe(withLatestFrom(stream$, recorder$, listener$))
         .subscribe(([_, stream, recorder, listener]) => {
           for (const track of stream.getTracks()) {
@@ -104,55 +152,131 @@ export default function App() {
           recorder.stopRecording();
           listener.stop();
         }),
-      playClick$.current
+
+      playClick$
         .pipe(
-          switchMap((blobDate) => getAudioPlayer({ blob: chunks$.current.get(blobDate)!, contentType: "audio/mpeg" }))
+          withLatestFrom(chunkByDate$),
+          switchMap(([date, chunkByDate]) =>
+            getAudioPlayer({
+              blob: chunkByDate.get(date)!,
+              contentType: "audio/mpeg",
+            })
+          )
         )
         .subscribe((player) => {
-          player.play()
+          player.play();
         }),
+
       encodedData$.subscribe(({ date }) => {
         setTranscriptions((prev) => new Map(prev).set(date, "..."));
+        setTranslations((prev) => new Map(prev).set(date, "..."));
       }),
-      encodedData$.subscribe(({ file, date }) => {
-        chunks$.current = new Map<Date, Blob>(chunks$.current).set(date, file)
+      transcriptions$.subscribe((transcriptions) => {
+        setTranscriptions(new Map(transcriptions));
       }),
-      transcriptions$.subscribe(({ text, date }) => {
-        setTranscriptions((prev) => new Map(prev).set(date, text));
+      translations$.subscribe((translations) => {
+        setTranscriptions(new Map(translations));
       }),
-    ];
 
-    return () => {
-      for (const s of subscriptions) {
-        s.unsubscribe();
-      }
-    };
-  }, []);
+      interval$
+        .pipe(withLatestFrom(listener$))
+        .subscribe(([interval, listener]) => {
+          listener.setInterval(interval);
+        }),
+      sensetivity$
+        .pipe(withLatestFrom(listener$))
+        .subscribe(([sensetivity, listener]) => {
+          listener.setSensetivity(sensetivity);
+        }),
+    ];
+  });
 
   return (
-    <div>
+    <div
+      style={{
+        marginTop: "40px",
+        display: "flex",
+        flexFlow: "column",
+        alignItems: "center",
+      }}
+    >
+      <flex style={{ alignItems: "flex-end", marginBottom: "24px" }}>
+        <div>
+          Interval:
+          <input
+            type="number"
+            value={interval}
+            onChange={(e) => emitInterval(Number.parseInt(e.target.value))}
+          />
+        </div>
+        <div>
+          Sensetivity:
+          <input
+            type="number"
+            value={sensetivity}
+            onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          Language:
+          <select
+            value={language}
+            onChange={(e) => emitLanguage(e.target.value as "es" | "en")}
+          >
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+          </select>
+        </div>
+      </flex>
 
-      <select onChange={(e) => language$.current.next(e.target.value)} style={{ display: "inline" }}>
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-      </select>
-      <button onClick={() => startRecordingClick$.current.next()}>Start</button>
-      <button onClick={() => stopRecordingClick$.current.next()}>Stop</button>
-      <pre>
-        <code >
-          {transcriptions.size === 0 && "Pres start and say something..."}
-          {[...transcriptions.keys()].map((date) => (
-            <Fragment key={+date}>
-              <span style={{ display: "flex", justifyContent: "space-between" }}>
-                [{date.toLocaleTimeString()}]: {transcriptions.get(date)} <span style={{ cursor: "pointer" }} onClick={() => playClick$.current.next(date)}>▶️</span>
-              </span>
-              <br />
-            </Fragment>
-          ))}
-        </code>
-      </pre>
+      <div style={{ marginBottom: "16px" }}>
+        <button onClick={() => emitStartRecording()}>Start</button>
+        <button onClick={() => emitStopRecording()}>Stop</button>
+      </div>
+
+      <div style={{ display: "flex", gap: "12px" }}>
+        <pre style={{ whiteSpace: "normal", flex: 1 }}>
+          <code>
+            {transcriptionByDate.size === 0 &&
+              "Pres start and say something..."}
+            {[...transcriptionByDate.keys()].map((date) => (
+              <Fragment key={+date}>
+                <span
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  [{date.toLocaleTimeString()}]: {transcriptionByDate.get(date)}{" "}
+                  <span
+                    style={{ cursor: "pointer" }}
+                    onClick={() => emitPlayClick(date)}
+                  >
+                    ▶️
+                  </span>
+                </span>
+                <br />
+              </Fragment>
+            ))}
+          </code>
+        </pre>
+        <pre
+          style={{
+            opacity: enableTranslation ? 1 : 0.25,
+            whiteSpace: "normal",
+            flex: 1,
+          }}
+        >
+          <code>
+            {translationByDate.size === 0 && "Translating..."}
+            {[...translationByDate.keys()].map((date) => (
+              <Fragment key={+date}>
+                <div>
+                  [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
+                </div>
+                <br />
+              </Fragment>
+            ))}
+          </code>
+        </pre>
+      </div>
     </div>
   );
 }
-
-

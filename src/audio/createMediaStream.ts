@@ -1,6 +1,6 @@
 import { Observable, from, shareReplay, switchMap } from "rxjs";
 
-export const getStream = () =>
+export const createMediaStream = () =>
   from(
     navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -18,5 +18,4 @@ export const getStream = () =>
         };
       });
     }),
-    shareReplay({ bufferSize: 1, refCount: true })
   );

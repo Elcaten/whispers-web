@@ -1,7 +1,7 @@
 import type { Encoder } from "lamejs";
 import { Observable, from, shareReplay, switchMap } from "rxjs";
 
-export const getEncoder = () =>
+export const createEncoder = () =>
   from(import("lamejs")).pipe(
     switchMap(({ Mp3Encoder }) => {
       console.log("create encoder");
@@ -17,5 +17,4 @@ export const getEncoder = () =>
         };
       });
     }),
-    shareReplay({ bufferSize: 1, refCount: true })
   );

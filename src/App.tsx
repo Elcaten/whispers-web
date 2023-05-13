@@ -23,15 +23,16 @@ import { useSubscriptions } from "./rxjs/useSubscriptions";
 import { getListenerEvents } from "./audio/getListenerEvents";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
-import { getRecorderAndBlobs } from "./audio/getRecorderAndBlobs";
+import { getRecorder } from "./audio/createRecorder";
 import { useObservable } from "./rxjs/useObservable";
 import { API_KEY } from "./config";
+import { getRecorderBlobs } from "./audio/getRecorderBlobs";
 
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
   const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
   const [language$, emitLanguage, language] = useBehaviorSubject<"en" | "es">(
-    "es"
+    "en"
   );
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
@@ -69,16 +70,12 @@ export default function App() {
       shareLatest()
     );
 
-    const recorderWithData$ = stream$.pipe(
-      switchMap((stream) => getRecorderAndBlobs(stream)),
+    const recorder$ = stream$.pipe(
+      switchMap((stream) => getRecorder(stream)),
       shareLatest()
     );
-    const recorder$ = recorderWithData$.pipe(
-      map(({ recorder }) => recorder),
-      shareLatest()
-    );
-    const recorderData$ = recorderWithData$.pipe(
-      switchMap(({ blobs$ }) => blobs$),
+    const recorderData$ = recorder$.pipe(
+      switchMap((recorder) => getRecorderBlobs(recorder)),
       shareLatest()
     );
 
@@ -142,14 +139,14 @@ export default function App() {
     );
 
     return [
-      recorder$.subscribe((value) => value.startRecording()),
+      recorder$.subscribe((value) => value.start(1000)),
       stopRecordingClick$
         .pipe(withLatestFrom(stream$, recorder$, listener$))
         .subscribe(([_, stream, recorder, listener]) => {
           for (const track of stream.getTracks()) {
             track.stop();
           }
-          recorder.stopRecording();
+          recorder.stop();
           listener.stop();
         }),
 

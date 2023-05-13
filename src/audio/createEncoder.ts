@@ -1,4 +1,4 @@
-import type { Encoder } from "lamejs";
+import type { Mp3Encoder } from "lamejs";
 import { Observable, from, shareReplay, switchMap } from "rxjs";
 
 export const createEncoder = () =>
@@ -6,7 +6,7 @@ export const createEncoder = () =>
     switchMap(({ Mp3Encoder }) => {
       console.log("create encoder");
 
-      return new Observable<Encoder>((subscriber) => {
+      return new Observable<Mp3Encoder>((subscriber) => {
         const encoder = new Mp3Encoder(1, 44100, 96);
 
         subscriber.next(encoder);

@@ -3,7 +3,7 @@ import { OPEN_AI_API_ENDPOINT } from "./config";
 
 interface GetTranscriptionsConfig {
   apiKey: string
-  file: File;
+  file: Blob;
   language?: "en" | "es";
   prompt?: string;
   response_format?: "json" | "text" | "srt" | "verbose_json" | "vtt";

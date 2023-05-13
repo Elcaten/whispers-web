@@ -19,7 +19,7 @@ function blobToBase64(blob: Blob) {
   });
 }
 
-export function getAudioPlayer(params: { blob: Blob, contentType: string }) {
+export function createAudioPlayer(params: { blob: Blob, contentType: string }) {
   return from(
     getHowler(params)
   ).pipe(
@@ -35,7 +35,5 @@ export function getAudioPlayer(params: { blob: Blob, contentType: string }) {
         };
       });
     }),
-    shareReplay({ bufferSize: 1, refCount: true })
   );
-
 }

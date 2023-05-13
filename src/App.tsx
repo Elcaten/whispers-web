@@ -5,28 +5,25 @@ import {
   filter,
   map,
   mergeMap,
-  repeat,
   scan,
   startWith,
   switchMap,
-  takeUntil,
-  withLatestFrom,
+  withLatestFrom
 } from "rxjs";
-import { createEncoder } from "./audio/createEncoder";
-import { fetchTranscription } from "./openAi/fetchTranscription";
-import { fetchTranslation } from "./openAi/fetchTranslation";
-import { getAudioPlayer } from "./audio/getAudioPlayer";
-import { shareLatest } from "./rxjs/shareLatest";
-import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
-import { useSubject } from "./rxjs/useSubject";
-import { useSubscriptions } from "./rxjs/useSubscriptions";
-import { getListenerEvents } from "./audio/getListenerEvents";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
-import { getRecorder } from "./audio/createRecorder";
-import { useObservable } from "./rxjs/useObservable";
+import { createRecorder } from "./audio/createRecorder";
+import { createAudioPlayer } from "./audio/createAudioPlayer";
+import { getListenerEvents } from "./audio/getListenerEvents";
+import { getRecorderData } from "./audio/getRecorderData";
 import { API_KEY } from "./config";
-import { getRecorderBlobs } from "./audio/getRecorderBlobs";
+import { fetchTranscription } from "./openAi/fetchTranscription";
+import { fetchTranslation } from "./openAi/fetchTranslation";
+import { shareLatest } from "./rxjs/shareLatest";
+import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
+import { useObservable } from "./rxjs/useObservable";
+import { useSubject } from "./rxjs/useSubject";
+import { useSubscriptions } from "./rxjs/useSubscriptions";
 
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
@@ -71,35 +68,18 @@ export default function App() {
     );
 
     const recorder$ = stream$.pipe(
-      switchMap((stream) => getRecorder(stream)),
+      switchMap((stream) => createRecorder(stream)),
       shareLatest()
     );
-    const recorderData$ = recorder$.pipe(
-      switchMap((recorder) => getRecorderBlobs(recorder)),
+    const recordedBlobs$ = recorder$.pipe(
+      switchMap((recorder) => getRecorderData(recorder)),
       shareLatest()
     );
 
-    const encoder$ = recorder$.pipe(
-      switchMap(() => createEncoder()),
-      shareLatest()
-    );
-    const encodedBlobs$ = recorderData$.pipe(
-      withLatestFrom(encoder$),
-      concatMap(async ([blob, encoder]) => {
-        const buffer = await blob.arrayBuffer();
-        const mp3chunk = encoder.encodeBuffer(new Int16Array(buffer));
-        const mp3blob = new Blob([mp3chunk], { type: "audio/mpeg" });
-        return mp3blob;
-      }),
-      shareLatest()
-    );
-    const encodedData$ = encodedBlobs$.pipe(
+    const recordedFiles$ = recordedBlobs$.pipe(
       buffer(stoppedSpeaking$),
       concatMap(async (encodedBlobs) => {
-        const blob = new Blob(encodedBlobs, {
-          type: "audio/mpeg",
-        });
-        const file = new File([blob], "speech.mp3", {
+        const file = new File(encodedBlobs, "speech.mp3", {
           type: "audio/mpeg",
         });
         return {
@@ -109,11 +89,11 @@ export default function App() {
       }),
       shareLatest()
     );
-    const chunkByDate$ = encodedData$.pipe(
+    const recoredFileByDate$ = recordedFiles$.pipe(
       scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>())
     );
 
-    const transcriptions$ = encodedData$.pipe(
+    const transcriptions$ = recordedFiles$.pipe(
       withLatestFrom(language$.pipe(startWith("en" as const))),
       mergeMap(([{ file, date }, language]) =>
         fetchTranscription({ file, language, apiKey: API_KEY }).then((text) => ({ text, date }))
@@ -125,7 +105,7 @@ export default function App() {
       shareLatest()
     );
 
-    const translations$ = encodedData$.pipe(
+    const translations$ = recordedFiles$.pipe(
       withLatestFrom(enableTranslation$),
       filter(([_, enableTranslation]) => enableTranslation),
       mergeMap(([{ file, date }]) =>
@@ -152,9 +132,9 @@ export default function App() {
 
       playClick$
         .pipe(
-          withLatestFrom(chunkByDate$),
+          withLatestFrom(recoredFileByDate$),
           switchMap(([date, chunkByDate]) =>
-            getAudioPlayer({
+            createAudioPlayer({
               blob: chunkByDate.get(date)!,
               contentType: "audio/mpeg",
             })
@@ -164,7 +144,7 @@ export default function App() {
           player.play();
         }),
 
-      encodedData$.subscribe(({ date }) => {
+      recordedFiles$.subscribe(({ date }) => {
         setTranscriptions((prev) => new Map(prev).set(date, "..."));
         setTranslations((prev) => new Map(prev).set(date, "..."));
       }),
@@ -197,7 +177,7 @@ export default function App() {
         alignItems: "center",
       }}
     >
-      <flex style={{ alignItems: "flex-end", marginBottom: "24px" }}>
+      <div className="flex" style={{ alignItems: "flex-end", marginBottom: "24px" }}>
         <div>
           Interval:
           <input
@@ -224,7 +204,7 @@ export default function App() {
             <option value="es">Spanish</option>
           </select>
         </div>
-      </flex>
+      </div>
 
       <div style={{ marginBottom: "16px" }}>
         <button onClick={() => emitStartRecording()}>Start</button>

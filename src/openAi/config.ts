@@ -1,1 +1,0 @@
-export const OPEN_AI_API_ENDPOINT = "https://api.openai.com/";

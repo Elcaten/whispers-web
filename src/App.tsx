@@ -4,19 +4,21 @@ import {
   concatMap,
   filter,
   map,
+  merge,
   mergeMap,
+  of,
   scan,
   startWith,
   switchMap,
   withLatestFrom
 } from "rxjs";
+import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
 import { createRecorder } from "./audio/createRecorder";
-import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { getListenerEvents } from "./audio/getListenerEvents";
 import { getRecorderData } from "./audio/getRecorderData";
-import { API_KEY } from "./config";
+import { OPEN_AI_API_KEY } from "./config";
 import { fetchTranscription } from "./openAi/fetchTranscription";
 import { fetchTranslation } from "./openAi/fetchTranslation";
 import { shareLatest } from "./rxjs/shareLatest";
@@ -96,7 +98,7 @@ export default function App() {
     const transcriptions$ = recordedFiles$.pipe(
       withLatestFrom(language$.pipe(startWith("en" as const))),
       mergeMap(([{ file, date }, language]) =>
-        fetchTranscription({ file, language, apiKey: API_KEY }).then((text) => ({ text, date }))
+        merge(of({ text: "...", date }), fetchTranscription({ file, language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date })))
       ),
       scan(
         (acc, { text, date }) => acc.set(date, text),
@@ -109,7 +111,7 @@ export default function App() {
       withLatestFrom(enableTranslation$),
       filter(([_, enableTranslation]) => enableTranslation),
       mergeMap(([{ file, date }]) =>
-        fetchTranslation({ file, apiKey: API_KEY }).then((text) => ({ text, date }))
+        merge(of({ text: "...", date }), fetchTranslation({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date })))
       ),
       scan(
         (acc, { text, date }) => acc.set(date, text),
@@ -144,15 +146,11 @@ export default function App() {
           player.play();
         }),
 
-      recordedFiles$.subscribe(({ date }) => {
-        setTranscriptions((prev) => new Map(prev).set(date, "..."));
-        setTranslations((prev) => new Map(prev).set(date, "..."));
-      }),
       transcriptions$.subscribe((transcriptions) => {
         setTranscriptions(new Map(transcriptions));
       }),
       translations$.subscribe((translations) => {
-        setTranscriptions(new Map(translations));
+        setTranslations(new Map(translations));
       }),
 
       interval$
@@ -167,6 +165,7 @@ export default function App() {
         }),
     ];
   });
+
 
   return (
     <div

@@ -1,4 +1,5 @@
 import React from "react";
+import useSWR, { SWRConfig } from "swr";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
@@ -7,7 +8,15 @@ import reportWebVitals from "./reportWebVitals";
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <App />
+    <SWRConfig
+      value={{
+        onError: (err) => {
+          console.error(err)
+        }
+      }}
+    >
+      <App />
+    </SWRConfig>
   </React.StrictMode>
 );
 

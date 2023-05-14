@@ -1,5 +1,5 @@
 import axios, { RawAxiosRequestHeaders } from "axios";
-import { OPEN_AI_API_ENDPOINT } from "./config";
+import { OPEN_AI_API_ENDPOINT } from "../config";
 
 interface GetTranslationConfig {
   apiKey: string

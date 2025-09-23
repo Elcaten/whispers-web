@@ -4,7 +4,7 @@ import { OPEN_AI_API_ENDPOINT } from "../config";
 interface GetTranscriptionsConfig {
   apiKey: string
   file: Blob;
-  language?: "en" | "es";
+  language?: "en" | "es" | "ru";
   prompt?: string;
   response_format?: "json" | "text" | "srt" | "verbose_json" | "vtt";
   temperature?: number;

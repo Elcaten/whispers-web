@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from "react";
+import { Fragment, useState } from "react";
 import {
   buffer,
   concatMap,
@@ -30,7 +30,7 @@ import { useSubscriptions } from "./rxjs/useSubscriptions";
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
   const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
-  const [language$, emitLanguage, language] = useBehaviorSubject<"en" | "es">(
+  const [language$, emitLanguage, language] = useBehaviorSubject<"en" | "es" | "ru">(
     "en"
   );
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
@@ -197,10 +197,11 @@ export default function App() {
           Language:
           <select
             value={language}
-            onChange={(e) => emitLanguage(e.target.value as "es" | "en")}
+            onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}
           >
             <option value="en">English</option>
             <option value="es">Spanish</option>
+            <option value="ru">Russian</option>
           </select>
         </div>
       </div>

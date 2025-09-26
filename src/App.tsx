@@ -68,23 +68,27 @@ export default function App() {
     );
     const recoredFileByDate$ = recordedFiles$.pipe(scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()));
 
-    const transcriptions$ = recordedFiles$.pipe(
-      withLatestFrom(language$.pipe(startWith("en" as const))),
-      mergeMap(([{ file, date }, language]) =>
+    const dd$ = recordedFiles$.pipe(
+      mergeMap(({ file, date }) =>
         merge(
           of({ text: "...", date }),
-          fetchTranscription({ file, language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
+          fetchTranscription({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
       ),
+      shareLatest()
+    );
+
+    const transcriptionsByDate$ = dd$.pipe(
       scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
       shareLatest()
     );
 
-    const translations$ = recordedFiles$.pipe(
-      mergeMap(({ file, date }) =>
+    const translationsByDate$ = dd$.pipe(
+      withLatestFrom(language$.pipe(startWith("en" as const))),
+      mergeMap(([{ date, text }, language]) =>
         merge(
           of({ text: "...", date }),
-          fetchTranslation({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
+          fetchTranslation({ text, targetLanguage: language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
       ),
       scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
@@ -115,10 +119,10 @@ export default function App() {
           player.play();
         }),
 
-      transcriptions$.subscribe((transcriptions) => {
+      transcriptionsByDate$.subscribe((transcriptions) => {
         setTranscriptions(new Map(transcriptions));
       }),
-      translations$.subscribe((translations) => {
+      translationsByDate$.subscribe((translations) => {
         setTranslations(new Map(translations));
       }),
 

@@ -2,48 +2,50 @@ import axios, { RawAxiosRequestHeaders } from "axios";
 import { OPEN_AI_API_ENDPOINT } from "../config";
 
 interface GetTranslationConfig {
-  apiKey: string
-  file: File;
-  prompt?: string;
-  response_format?: "json" | "text" | "srt" | "verbose_json" | "vtt";
+  apiKey: string;
+  text: string;
+  targetLanguage: string;
+  model?: string;
   temperature?: number;
 }
 
-export async function fetchTranslation(
-  {
-    apiKey,
-    file,
-    prompt,
-    response_format = "json",
+interface ChatCompletionResponse {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
+}
+
+export async function fetchTranslation({ apiKey, text, targetLanguage, model = "gpt-3.5-turbo", temperature = 0.3 }: GetTranslationConfig) {
+  const prompt = `Translate the following text to ${targetLanguage}:\n\n${text}`;
+
+  const body = {
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a helpful translator. Translate the user's text accurately while preserving the original meaning and tone. If you are unable to translate the text for any reason, reply with exactly '???'.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
     temperature,
-  }: GetTranslationConfig
-) {
-  const body = new FormData();
-  body.append("file", file);
-  body.append("model", "whisper-1");
-  body.append("response_format", response_format);
-  if (temperature) {
-    body.append("temperature", temperature.toString(10));
-  }
-  if (prompt) {
-    body.append("prompt", prompt);
-  }
+    max_tokens: 1000,
+  };
 
-  const headers: RawAxiosRequestHeaders = {};
-  headers["Content-Type"] = "multipart/form-data";
-  headers[
-    "Authorization"
-  ] = `Bearer ${apiKey}`;
+  const headers: RawAxiosRequestHeaders = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
 
+  const response = await axios.post<ChatCompletionResponse>(new URL("/v1/chat/completions", OPEN_AI_API_ENDPOINT).toString(), body, {
+    headers,
+  });
 
-  const response = await axios.post<{ text: string }>(
-    new URL("/v1/audio/translations", OPEN_AI_API_ENDPOINT).toString(),
-    body,
-    {
-      headers,
-    }
-  );
-
-  return response.data.text as string;
+  return response.data.choices[0].message.content.trim();
 }
 

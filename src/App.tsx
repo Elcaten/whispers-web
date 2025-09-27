@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
@@ -13,6 +13,10 @@ import { shareLatest } from "./rxjs/shareLatest";
 import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
 import { useSubject } from "./rxjs/useSubject";
 import { useSubscriptions } from "./rxjs/useSubscriptions";
+import { Button } from "./ui/button";
+import { Field, Label } from "./ui/fieldset";
+import { Input } from "./ui/input";
+import { Select } from "./ui/select";
 
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
@@ -24,6 +28,7 @@ export default function App() {
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
 
   const enableTranslation = true;
+
 
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
@@ -148,77 +153,63 @@ export default function App() {
   });
 
   return (
-    <div
-      style={{
-        marginTop: "40px",
-        display: "flex",
-        flexFlow: "column",
-        alignItems: "center",
-      }}
-    >
-      <div className="flex" style={{ alignItems: "flex-end", marginBottom: "24px" }}>
-        <div>
-          Interval:
-          <input type="number" value={interval} onChange={(e) => emitInterval(Number.parseInt(e.target.value))} />
-        </div>
-        <div>
-          Sensetivity:
-          <input type="number" value={sensetivity} onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))} />
-        </div>
-        <div style={{ flex: 1 }}>
-          Translate to:
-          <select value={language} onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}>
+    <div className="mt-10 flex flex-col items-center">
+      <div className="flex flex-end mb-10 gap-4">
+        <Field>
+          <Label>Interval</Label>
+          <Input type="number" value={interval} onChange={(e) => emitInterval(Number.parseInt(e.target.value))} />
+        </Field>
+        <Field>
+          <Label>Sensetivity</Label>
+          <Input type="number" value={sensetivity} onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))} />
+        </Field>
+        <Field>
+          <Label>Translate to</Label>
+          <Select value={language} onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}>
             <option value="en">English</option>
             <option value="es">Spanish</option>
             <option value="ru">Russian</option>
-          </select>
+          </Select>
+        </Field>
+      </div>
+
+      <div className="flex gap-4 mb-4">
+        <Button outline onClick={() => emitStartRecording()}>
+          Start
+        </Button>
+        <Button outline onClick={() => emitStopRecording()}>
+          Stop
+        </Button>
+      </div>
+
+      <div className="flex gap-4 p-8">
+        <div className="flex flex-col flex-1 gap-2">
+          {transcriptionByDate.size === 0 && "Pres start and say something..."}
+          {[...transcriptionByDate.keys()].map((date) => (
+            <div key={+date} className="bg-gray-100 rounded-md p-2">
+              <span style={{ display: "flex", justifyContent: "space-between" }}>
+                [{date.toLocaleTimeString()}]: {transcriptionByDate.get(date)}{" "}
+                <span style={{ cursor: "pointer" }} onClick={() => emitPlayClick(date)}>
+                  ▶️
+                </span>
+              </span>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <div style={{ marginBottom: "16px" }}>
-        <button onClick={() => emitStartRecording()}>Start</button>
-        <button onClick={() => emitStopRecording()}>Stop</button>
-      </div>
-
-      <div style={{ display: "flex", gap: "12px" }}>
-        <pre style={{ whiteSpace: "normal", flex: 1 }}>
-          <code>
-            {transcriptionByDate.size === 0 && "Pres start and say something..."}
-            {[...transcriptionByDate.keys()].map((date) => (
-              <Fragment key={+date}>
-                <span style={{ display: "flex", justifyContent: "space-between" }}>
-                  [{date.toLocaleTimeString()}]: {transcriptionByDate.get(date)}{" "}
-                  <span style={{ cursor: "pointer" }} onClick={() => emitPlayClick(date)}>
-                    ▶️
-                  </span>
+        <div className="flex flex-col flex-1 gap-2">
+          {translationByDate.size === 0 && "Translating..."}
+          {[...translationByDate.keys()].map((date) => (
+            <div key={+date} className="bg-gray-100 rounded-md p-2">
+              <span style={{ display: "flex", justifyContent: "space-between" }}>
+                [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
+                <span style={{ cursor: "pointer" }} onClick={() => emitGenerateAudioClick(date)}>
+                  🔊
                 </span>
-                <br />
-              </Fragment>
-            ))}
-          </code>
-        </pre>
-        <pre
-          style={{
-            opacity: enableTranslation ? 1 : 0.25,
-            whiteSpace: "normal",
-            flex: 1,
-          }}
-        >
-          <code>
-            {translationByDate.size === 0 && "Translating..."}
-            {[...translationByDate.keys()].map((date) => (
-              <Fragment key={+date}>
-                <span style={{ display: "flex", justifyContent: "space-between" }}>
-                  [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
-                  <span style={{ cursor: "pointer" }} onClick={() => emitGenerateAudioClick(date)}>
-                    🔊
-                  </span>
-                </span>
-                <br />
-              </Fragment>
-            ))}
-          </code>
-        </pre>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,23 @@
-import useSwrImmutable from "swr/immutable";
+import { useState, useEffect } from "react";
 import { client } from "./client";
 
 export function useVoices() {
-  return useSwrImmutable("/v1/voices", url => client.get<VoicesResponse>(url).then(response => response.data))
+  const [data, setData] = useState<VoicesResponse | undefined>(undefined);
+  const [error, setError] = useState<Error | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setError(undefined);
+    
+    client.get<VoicesResponse>("/v1/voices")
+      .then(response => response.data)
+      .then(setData)
+      .catch(setError)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  return { data, error, isLoading };
 }
 
 interface VoicesResponse {

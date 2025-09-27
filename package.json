@@ -6,7 +6,6 @@
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.4.3",
-    "audio-recorder-polyfill": "^0.4.1",
     "axios": "^1.12.2",
     "hark": "^1.2.3",
     "howler": "^2.2.4",

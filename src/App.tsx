@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { buffer, concatMap, filter, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
+import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
@@ -21,6 +21,7 @@ export default function App() {
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [playClick$, emitPlayClick] = useSubject<Date>();
+  const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
 
   const enableTranslation = true;
 
@@ -119,6 +120,17 @@ export default function App() {
           player.play();
         }),
 
+      generateAudioClick$
+        .pipe(
+          withLatestFrom(transcriptionsByDate$),
+          map(([date, transcriptionsByDate]) => {
+            return transcriptionsByDate.get(date)!;
+          })
+        )
+        .subscribe((transcription) => {
+          console.log(transcription);
+        }),
+
       transcriptionsByDate$.subscribe((transcriptions) => {
         setTranscriptions(new Map(transcriptions));
       }),
@@ -196,9 +208,12 @@ export default function App() {
             {translationByDate.size === 0 && "Translating..."}
             {[...translationByDate.keys()].map((date) => (
               <Fragment key={+date}>
-                <div>
+                <span style={{ display: "flex", justifyContent: "space-between" }}>
                   [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
-                </div>
+                  <span style={{ cursor: "pointer" }} onClick={() => emitGenerateAudioClick(date)}>
+                    🔊
+                  </span>
+                </span>
                 <br />
               </Fragment>
             ))}

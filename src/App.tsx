@@ -27,9 +27,6 @@ export default function App() {
   const [playClick$, emitPlayClick] = useSubject<Date>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
 
-  const enableTranslation = true;
-
-
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
 

@@ -1,19 +1,18 @@
 import { Observable } from "rxjs";
 
 export function getRecorderData(recorder: MediaRecorder) {
-  console.log("create recorder blobs");
-
   return new Observable<Blob>((subscriber) => {
+    console.log("RECORDER_BLOBS - Created");
+
     const onDataAvailable = (e: BlobEvent) => {
-      console.log(e.data.type);
-      
-      subscriber.next(e.data)
-    }
-    recorder.addEventListener('dataavailable', onDataAvailable)
+      console.log(`RECODER_EVENTS - New ${e.data.type} data available `);
+      subscriber.next(e.data);
+    };
+    recorder.addEventListener("dataavailable", onDataAvailable);
 
     return () => {
-      console.log("destroy recorder blobs");
-      recorder.removeEventListener("dataavailable", onDataAvailable)
+      console.log(`RECORDER_BLOBS - Destroyed`);
+      recorder.removeEventListener("dataavailable", onDataAvailable);
     };
   });
 }

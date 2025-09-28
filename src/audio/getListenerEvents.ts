@@ -4,9 +4,8 @@ import { Listener } from "./createListener";
 export type ListenerEvent = "speaking" | "stoppedSpeaking";
 
 export function getListenerEvents({ listener }: { listener: Listener }) {
-  console.log("create listener events");
-
   return new Observable<ListenerEvent>((subscriber) => {
+    console.log(`HARK_EVENTS - created`);
     const onSpeaking = () => {
       // console.log("speaking");
       subscriber.next("speaking");
@@ -19,13 +18,13 @@ export function getListenerEvents({ listener }: { listener: Listener }) {
     // listener.on("volume_change", onVolumeChange);
 
     const onStoppedSpeaking = () => {
-      console.log("stopped speaking");
+      console.log(`HARK_EVENTS - Stopped Speaking`);
       subscriber.next("stoppedSpeaking");
     };
     listener.on("stopped_speaking", onStoppedSpeaking);
 
     return () => {
-      console.log("destroy listener events");
+      console.log(`HARK_EVENTS - Destroyed`);
       listener.off("speaking", onSpeaking);
       // listener.off("volume_change", onVolumeChange);
       listener.off("stopped_speaking", onStoppedSpeaking);

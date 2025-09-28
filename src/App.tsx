@@ -2,13 +2,14 @@ import { useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
-import { createMediaStream } from "./audio/createMediaStream";
 import { createRecorder } from "./audio/createRecorder";
 import { getListenerEvents } from "./audio/getListenerEvents";
 import { getRecorderData } from "./audio/getRecorderData";
+import { requestAudioStream } from "./audio/requestAudioStream";
 import { OPEN_AI_API_KEY } from "./config";
 import { fetchTranscription } from "./openAi/fetchTranscription";
 import { fetchTranslation } from "./openAi/fetchTranslation";
+import { shareLatest } from "./rxjs/shareLatest";
 import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
 import { useSubject } from "./rxjs/useSubject";
 import { useSubscriptions } from "./rxjs/useSubscriptions";
@@ -32,19 +33,27 @@ export default function App() {
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
 
   useSubscriptions(() => {
-    const stream$ = startRecordingClick$.pipe(switchMap(() => createMediaStream()));
+    const audioStream$ = startRecordingClick$.pipe(switchMap(requestAudioStream), shareLatest());
 
-    const listener$ = stream$.pipe(
+    const listener$ = audioStream$.pipe(
       withLatestFrom(sensetivity$, interval$),
-      switchMap(([stream, sensetivity, interval]) => createListener({ stream, sensetivity, interval }))
+      switchMap(([stream, sensetivity, interval]) => createListener({ stream, sensetivity, interval })),
+      shareLatest()
     );
     const stoppedSpeaking$ = listener$.pipe(
       switchMap((listener) => getListenerEvents({ listener })),
-      filter((event) => event === "stoppedSpeaking")
+      filter((event) => event === "stoppedSpeaking"),
+      shareLatest()
     );
 
-    const recorder$ = stream$.pipe(switchMap((stream) => createRecorder(stream)));
-    const recordedBlobs$ = recorder$.pipe(switchMap((recorder) => getRecorderData(recorder)));
+    const recorder$ = audioStream$.pipe(
+      switchMap((stream) => createRecorder(stream)),
+      shareLatest()
+    );
+    const recordedBlobs$ = recorder$.pipe(
+      switchMap((recorder) => getRecorderData(recorder)),
+      shareLatest()
+    );
 
     const recordedFiles$ = recordedBlobs$.pipe(
       buffer(stoppedSpeaking$),
@@ -56,9 +65,13 @@ export default function App() {
           file,
           date: new Date(),
         };
-      })
+      }),
+      shareLatest()
     );
-    const recoredFileByDate$ = recordedFiles$.pipe(scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()));
+    const recoredFileByDate$ = recordedFiles$.pipe(
+      scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()),
+      shareLatest()
+    );
 
     const transcriptions$ = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
@@ -66,10 +79,14 @@ export default function App() {
           of({ text: "...", date }),
           fetchTranscription({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
-      )
+      ),
+      shareLatest()
     );
 
-    const transcriptionsByDate$ = transcriptions$.pipe(scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()));
+    const transcriptionsByDate$ = transcriptions$.pipe(
+      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
+      shareLatest()
+    );
 
     const translationsByDate$ = transcriptions$.pipe(
       withLatestFrom(language$.pipe(startWith("en" as const))),
@@ -79,12 +96,13 @@ export default function App() {
           fetchTranslation({ text, targetLanguage: language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
       ),
-      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>())
+      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
+      shareLatest()
     );
 
     return [
       recorder$.subscribe((value) => value.start(1000)),
-      stopRecordingClick$.pipe(withLatestFrom(stream$, recorder$, listener$)).subscribe(([_, stream, recorder, listener]) => {
+      stopRecordingClick$.pipe(withLatestFrom(audioStream$, recorder$, listener$)).subscribe(([_, stream, recorder, listener]) => {
         for (const track of stream.getTracks()) {
           track.stop();
         }

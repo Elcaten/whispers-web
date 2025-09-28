@@ -1,21 +1,20 @@
-import { Observable, from, shareReplay, switchMap } from "rxjs";
+import { Observable, from, switchMap } from "rxjs";
 
-export const createMediaStream = () =>
+export const requestAudioStream = (): Observable<MediaStream> =>
   from(
     navigator.mediaDevices.getUserMedia({
       audio: true,
     })
   ).pipe(
     switchMap((stream) => {
-      console.log("create stream");
-
       return new Observable<MediaStream>((subscriber) => {
+        console.log(`STREAM - Requested stream ${stream.id}`);
         subscriber.next(stream);
 
         return () => {
-          console.log("destroy stream");
+          console.log(`STREAM - Destroye stream ${stream.id}`);
           stream.getTracks().forEach((track) => track.stop());
         };
       });
-    }),
+    })
   );

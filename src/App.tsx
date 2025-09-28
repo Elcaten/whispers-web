@@ -75,7 +75,7 @@ export default function App() {
       shareLatest()
     );
 
-    const dd$ = recordedFiles$.pipe(
+    const transcriptions$ = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
         merge(
           of({ text: "...", date }),
@@ -85,12 +85,12 @@ export default function App() {
       shareLatest()
     );
 
-    const transcriptionsByDate$ = dd$.pipe(
+    const transcriptionsByDate$ = transcriptions$.pipe(
       scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
       shareLatest()
     );
 
-    const translationsByDate$ = dd$.pipe(
+    const translationsByDate$ = transcriptions$.pipe(
       withLatestFrom(language$.pipe(startWith("en" as const))),
       mergeMap(([{ date, text }, language]) =>
         merge(

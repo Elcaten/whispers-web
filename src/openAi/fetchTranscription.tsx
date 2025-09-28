@@ -1,3 +1,4 @@
+import { faker } from "@faker-js/faker";
 import axios, { RawAxiosRequestHeaders } from "axios";
 import { OPEN_AI_API_ENDPOINT } from "../config";
 
@@ -10,6 +11,10 @@ interface GetTranscriptionsConfig {
 }
 
 export async function fetchTranscription({ apiKey, file, prompt, response_format = "json", temperature }: GetTranscriptionsConfig): Promise<string> {
+  if (1 + 3 - 1 === 3) {
+    return faker.lorem.sentence();
+  }
+
   const body = new FormData();
   body.append("file", file);
   body.append("model", "whisper-1");

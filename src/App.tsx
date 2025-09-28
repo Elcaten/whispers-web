@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
-import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
 import { createRecorder } from "./audio/createRecorder";
@@ -61,8 +60,8 @@ export default function App() {
     const recordedFiles$ = recordedBlobs$.pipe(
       buffer(stoppedSpeaking$),
       concatMap(async (encodedBlobs) => {
-        const file = new File(encodedBlobs, "speech.mp3", {
-          type: "audio/mpeg",
+        const file = new File(encodedBlobs, `${Date.now()}.mp4`, {
+          type: "audio/mp4",
         });
         return {
           file,
@@ -71,7 +70,10 @@ export default function App() {
       }),
       shareLatest()
     );
-    const recoredFileByDate$ = recordedFiles$.pipe(scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()));
+    const recoredFileByDate$ = recordedFiles$.pipe(
+      scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()),
+      shareLatest()
+    );
 
     const dd$ = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
@@ -113,15 +115,20 @@ export default function App() {
       playClick$
         .pipe(
           withLatestFrom(recoredFileByDate$),
-          switchMap(([date, chunkByDate]) =>
-            createAudioPlayer({
-              blob: chunkByDate.get(date)!,
-              contentType: "audio/mpeg",
-            })
-          )
+          map(([date, audioFieByDate]) => {
+            console.log(audioFieByDate);
+
+            const audioFile = audioFieByDate.get(date)!;
+            let audioUrl = URL.createObjectURL(audioFile);
+            let audio = new Audio(audioUrl);
+            return audio;
+          })
         )
         .subscribe((player) => {
-          player.play();
+          console.log("play", player);
+          player.play().catch((error) => {
+            console.error("error playing audio", error);
+          });
         }),
 
       generateAudioClick$

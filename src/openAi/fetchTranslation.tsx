@@ -1,3 +1,4 @@
+import { faker } from "@faker-js/faker";
 import axios, { RawAxiosRequestHeaders } from "axios";
 import { OPEN_AI_API_ENDPOINT } from "../config";
 
@@ -18,6 +19,10 @@ interface ChatCompletionResponse {
 }
 
 export async function fetchTranslation({ apiKey, text, targetLanguage, model = "gpt-3.5-turbo", temperature = 0.3 }: GetTranslationConfig) {
+  if (1 + 3 - 1 === 3) {
+    return faker.lorem.sentence();
+  }
+
   const prompt = `Translate the following text to ${targetLanguage}:\n\n${text}`;
 
   const body = {
@@ -48,4 +53,3 @@ export async function fetchTranslation({ apiKey, text, targetLanguage, model = "
 
   return response.data.choices[0].message.content.trim();
 }
-

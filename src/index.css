@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
-  display: flex;
-  justify-content: space-between;
+@theme {
+  --font-sans: Inter, sans-serif;
+  --font-sans--font-feature-settings: 'cv11';
 }

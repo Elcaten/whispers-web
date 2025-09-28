@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { ChevronDownIcon, CogIcon, LanguageIcon, PlayPauseIcon } from "@heroicons/react/16/solid";
+import { Fragment, useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
@@ -15,10 +16,11 @@ import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
 import { useSubject } from "./rxjs/useSubject";
 import { useSubscriptions } from "./rxjs/useSubscriptions";
 import { Button } from "./ui/button";
-import { Field, Label } from "./ui/fieldset";
+import { Dialog, DialogActions, DialogBody, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Field, FieldGroup, Fieldset, Label } from "./ui/fieldset";
 import { Input } from "./ui/input";
+import { Navbar, NavbarItem, NavbarLabel, NavbarSection, NavbarSpacer } from "./ui/navbar";
 import { Select } from "./ui/select";
-import { Switch, SwitchField } from "./ui/switch";
 
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
@@ -28,7 +30,6 @@ export default function App() {
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [playClick$, emitPlayClick] = useSubject<Date>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
-  const [meSpeaking$, emitMeSpeaking, meSpeaking] = useBehaviorSubject(false);
 
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
@@ -153,68 +154,100 @@ export default function App() {
       sensetivity$.pipe(withLatestFrom(listener$)).subscribe(([sensetivity, listener]) => {
         listener.setSensetivity(sensetivity);
       }),
-
-      meSpeaking$.subscribe((meSpeaking) => {
-        console.log(meSpeaking);
-      }),
     ];
   });
 
+  let [isOpen, setIsOpen] = useState(false);
+
   return (
-    <div className="mt-10 flex flex-col items-center">
-      <div className="flex flex-end mb-10 gap-4">
-        <Field>
-          <Label>Interval</Label>
-          <Input type="number" value={interval} onChange={(e) => emitInterval(Number.parseInt(e.target.value))} />
-        </Field>
-        <Field>
-          <Label>Sensetivity</Label>
-          <Input type="number" value={sensetivity} onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))} />
-        </Field>
-        <Field>
-          <Label>Translate to</Label>
-          <Select value={language} onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="ru">Russian</option>
-          </Select>
-        </Field>
-      </div>
+    <Fragment>
+      <div>
+        <Navbar className="border border-zinc-200 px-4 sticky top-0 bg-white z-2">
+          <NavbarItem onClick={() => setIsOpen(true)}>
+            <CogIcon />
+            <NavbarLabel>Settings</NavbarLabel>
+            <ChevronDownIcon />
+          </NavbarItem>
 
-      <div className="flex gap-4 mb-4 items-center">
-        <Button outline onClick={() => emitStartRecording()}>
-          Start
-        </Button>
-        <Button outline onClick={() => emitStopRecording()}>
-          Stop
-        </Button>
-        <SwitchField>
-          <Label>Me speaking</Label>
-          <Switch checked={meSpeaking} onChange={(v) => emitMeSpeaking(v)} />
-        </SwitchField>
-      </div>
+          <NavbarSpacer />
+          <NavbarSection>
+            <NavbarItem onClick={() => emitStartRecording()}>Start</NavbarItem>
+          </NavbarSection>
+          <NavbarSection>
+            <NavbarItem onClick={() => emitStopRecording()}>Stop</NavbarItem>
+          </NavbarSection>
+        </Navbar>
 
-      <div className="flex gap-4 p-8">
-        <div className="flex flex-col flex-1 gap-2">
-          {transcriptionByDate.size === 0 && "Pres start and say something..."}
-          {[...transcriptionByDate.keys()].map((date) => (
-            <div key={+date} className="bg-gray-100 rounded-md ">
-              <span className="flex justify-between gap-1 border-b border-gray-300 py-2 px-4">
-                [{date.toLocaleTimeString()}]: {transcriptionByDate.get(date)}{" "}
-                <span style={{ cursor: "pointer" }} onClick={() => emitPlayClick(date)}>
-                  ▶️
+        <div className="mt-10 flex flex-col items-center z-1">
+          <div className="flex gap-4 p-8">
+            <div className="flex flex-col flex-1 gap-2">
+              {transcriptionByDate.size === 0 && (
+                <span>
+                  Press
+                  <Button className="mx-2" color="green" onClick={() => emitStartRecording()}>
+                    Start
+                  </Button>
+                  and say something...
                 </span>
-              </span>
-              <span className="flex justify-between gap-1 py-2 px-4">
-                [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
-                <span style={{ cursor: "pointer" }} onClick={() => emitGenerateAudioClick(date)}>
-                  🔊
-                </span>
-              </span>
+              )}
+              {[...transcriptionByDate.keys()].map((date) => (
+                <div key={+date} className="bg-gray-100 rounded-md">
+                  <span>
+                    <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
+                      <span> {transcriptionByDate.get(date)} </span>
+                      <Button plain onClick={() => emitPlayClick(date)}>
+                        <PlayPauseIcon />
+                      </Button>
+                    </span>
+                    <span className="flex justify-between gap-4 py-1 px-6 items-center ">
+                      <span> {translationByDate.get(date)} </span>
+                      <Button plain onClick={() => emitGenerateAudioClick(date)}>
+                        <LanguageIcon />
+                      </Button>
+                    </span>
+                  </span>
+                  <span className="px-2 py-1 text-gray-400 text-xs flex justify-end">{date.toLocaleTimeString()}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
-    </div>
+
+      <Dialog open={isOpen} onClose={setIsOpen}>
+        <DialogTitle>Settings</DialogTitle>
+        <DialogDescription>The refund will be reflected in the customer’s bank account 2 to 3 business days after processing.</DialogDescription>
+        <DialogBody>
+          <Fieldset>
+            <FieldGroup>
+              <Field>
+                <Label>Interval {interval}</Label>
+                <Input type="range" value={interval} onChange={(e) => emitInterval(Number.parseInt(e.target.value))} />
+              </Field>
+              <Field>
+                <Label>Sensetivity {sensetivity}</Label>
+                <Input type="range" value={sensetivity} onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))} />
+              </Field>
+              <Field>
+                <Label>Translate to</Label>
+                <Select value={language} onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}>
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="ru">Russian</option>
+                </Select>
+              </Field>
+            </FieldGroup>
+          </Fieldset>
+        </DialogBody>
+        <DialogActions>
+          <Button color="red" onClick={() => setIsOpen(false)}>
+            Cancel
+          </Button>
+          <Button color="green" onClick={() => setIsOpen(false)}>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Fragment>
   );
 }

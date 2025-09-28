@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
+import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createMediaStream } from "./audio/createMediaStream";
 import { createRecorder } from "./audio/createRecorder";
@@ -115,20 +116,15 @@ export default function App() {
       playClick$
         .pipe(
           withLatestFrom(recoredFileByDate$),
-          map(([date, audioFieByDate]) => {
-            console.log(audioFieByDate);
-
-            const audioFile = audioFieByDate.get(date)!;
-            let audioUrl = URL.createObjectURL(audioFile);
-            let audio = new Audio(audioUrl);
-            return audio;
-          })
+          switchMap(([date, audioFieByDate]) => {
+            const audioBlob = audioFieByDate.get(date)!;
+            return createAudioPlayer({ audioBlob });
+          }),
+          switchMap((audioPlayer) => audioPlayer.play())
         )
-        .subscribe((player) => {
-          console.log("play", player);
-          player.play().catch((error) => {
-            console.error("error playing audio", error);
-          });
+        .subscribe({
+          error: (e) => console.error(e),
+          complete: () => console.info("audio playback complete"),
         }),
 
       generateAudioClick$

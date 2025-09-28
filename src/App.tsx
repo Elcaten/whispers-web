@@ -17,6 +17,7 @@ import { Button } from "./ui/button";
 import { Field, Label } from "./ui/fieldset";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
+import { Switch, SwitchField } from "./ui/switch";
 
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
@@ -26,6 +27,7 @@ export default function App() {
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [playClick$, emitPlayClick] = useSubject<Date>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
+  const [meSpeaking$, emitMeSpeaking, meSpeaking] = useBehaviorSubject(false);
 
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
@@ -146,6 +148,10 @@ export default function App() {
       sensetivity$.pipe(withLatestFrom(listener$)).subscribe(([sensetivity, listener]) => {
         listener.setSensetivity(sensetivity);
       }),
+
+      meSpeaking$.subscribe((meSpeaking) => {
+        console.log(meSpeaking);
+      }),
     ];
   });
 
@@ -170,13 +176,17 @@ export default function App() {
         </Field>
       </div>
 
-      <div className="flex gap-4 mb-4">
+      <div className="flex gap-4 mb-4 items-center">
         <Button outline onClick={() => emitStartRecording()}>
           Start
         </Button>
         <Button outline onClick={() => emitStopRecording()}>
           Stop
         </Button>
+        <SwitchField>
+          <Label>Me speaking</Label>
+          <Switch checked={meSpeaking} onChange={(v) => emitMeSpeaking(v)} />
+        </SwitchField>
       </div>
 
       <div className="flex gap-4 p-8">

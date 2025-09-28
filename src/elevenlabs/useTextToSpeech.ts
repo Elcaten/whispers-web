@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ELEVEN_LABS_VOICE_ID } from "../config";
 import { client } from "./client";
 
@@ -9,11 +9,12 @@ export function useTextToSpeech({ text /*, voiceId */ }: { text: string /*, voic
 
   useEffect(() => {
     if (!text) return;
-    
+
     setIsLoading(true);
     setError(undefined);
-    
-    client.post(`/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`, { text })
+
+    client
+      .post(`/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`, { text })
       .then((response) => new Blob([response.data]))
       .then(setData)
       .catch(setError)
@@ -24,5 +25,16 @@ export function useTextToSpeech({ text /*, voiceId */ }: { text: string /*, voic
 }
 
 export function generateSpeech({ text, voiceId = ELEVEN_LABS_VOICE_ID }: { text: string; voiceId?: string }) {
-  return client.post(`/v1/text-to-speech/${voiceId}`, { text, model_id: "eleven_flash_v2_5" }).then((response) => new Blob([response.data]));
+  return client
+    .post(
+      `/v1/text-to-speech/${voiceId}`,
+      { text, model_id: "eleven_flash_v2_5" },
+      {
+        responseType: "blob",
+        params: {
+          output_format: "mp3_44100_128",
+        },
+      }
+    )
+    .then((response) => response.data as Blob);
 }

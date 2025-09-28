@@ -7,6 +7,7 @@ import { getListenerEvents } from "./audio/getListenerEvents";
 import { getRecorderData } from "./audio/getRecorderData";
 import { requestAudioStream } from "./audio/requestAudioStream";
 import { OPEN_AI_API_KEY } from "./config";
+import { generateSpeech } from "./elevenlabs/useTextToSpeech";
 import { fetchTranscription } from "./openAi/fetchTranscription";
 import { fetchTranslation } from "./openAi/fetchTranslation";
 import { shareLatest } from "./rxjs/shareLatest";
@@ -126,13 +127,17 @@ export default function App() {
 
       generateAudioClick$
         .pipe(
-          withLatestFrom(transcriptionsByDate$),
-          map(([date, transcriptionsByDate]) => {
-            return transcriptionsByDate.get(date)!;
-          })
+          withLatestFrom(translationsByDate$),
+          map(([date, translationsByDate]) => {
+            return translationsByDate.get(date)!;
+          }),
+          switchMap((text) => generateSpeech({ text })),
+          switchMap((audioBlob) => createAudioPlayer({ audioBlob })),
+          switchMap((player) => player.play())
         )
-        .subscribe((transcription) => {
-          console.log(transcription);
+        .subscribe({
+          error: (e) => console.error(e),
+          complete: () => console.info("audio playback complete"),
         }),
 
       transcriptionsByDate$.subscribe((transcriptions) => {

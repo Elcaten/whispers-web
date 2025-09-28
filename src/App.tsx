@@ -9,7 +9,6 @@ import { getRecorderData } from "./audio/getRecorderData";
 import { OPEN_AI_API_KEY } from "./config";
 import { fetchTranscription } from "./openAi/fetchTranscription";
 import { fetchTranslation } from "./openAi/fetchTranslation";
-import { shareLatest } from "./rxjs/shareLatest";
 import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
 import { useSubject } from "./rxjs/useSubject";
 import { useSubscriptions } from "./rxjs/useSubscriptions";
@@ -33,30 +32,19 @@ export default function App() {
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
 
   useSubscriptions(() => {
-    const stream$ = startRecordingClick$.pipe(
-      switchMap(() => createMediaStream()),
-      shareLatest()
-    );
+    const stream$ = startRecordingClick$.pipe(switchMap(() => createMediaStream()));
 
     const listener$ = stream$.pipe(
       withLatestFrom(sensetivity$, interval$),
-      switchMap(([stream, sensetivity, interval]) => createListener({ stream, sensetivity, interval })),
-      shareLatest()
+      switchMap(([stream, sensetivity, interval]) => createListener({ stream, sensetivity, interval }))
     );
     const stoppedSpeaking$ = listener$.pipe(
       switchMap((listener) => getListenerEvents({ listener })),
-      filter((event) => event === "stoppedSpeaking"),
-      shareLatest()
+      filter((event) => event === "stoppedSpeaking")
     );
 
-    const recorder$ = stream$.pipe(
-      switchMap((stream) => createRecorder(stream)),
-      shareLatest()
-    );
-    const recordedBlobs$ = recorder$.pipe(
-      switchMap((recorder) => getRecorderData(recorder)),
-      shareLatest()
-    );
+    const recorder$ = stream$.pipe(switchMap((stream) => createRecorder(stream)));
+    const recordedBlobs$ = recorder$.pipe(switchMap((recorder) => getRecorderData(recorder)));
 
     const recordedFiles$ = recordedBlobs$.pipe(
       buffer(stoppedSpeaking$),
@@ -68,13 +56,9 @@ export default function App() {
           file,
           date: new Date(),
         };
-      }),
-      shareLatest()
+      })
     );
-    const recoredFileByDate$ = recordedFiles$.pipe(
-      scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()),
-      shareLatest()
-    );
+    const recoredFileByDate$ = recordedFiles$.pipe(scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()));
 
     const transcriptions$ = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
@@ -82,14 +66,10 @@ export default function App() {
           of({ text: "...", date }),
           fetchTranscription({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
-      ),
-      shareLatest()
+      )
     );
 
-    const transcriptionsByDate$ = transcriptions$.pipe(
-      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
-      shareLatest()
-    );
+    const transcriptionsByDate$ = transcriptions$.pipe(scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()));
 
     const translationsByDate$ = transcriptions$.pipe(
       withLatestFrom(language$.pipe(startWith("en" as const))),
@@ -99,8 +79,7 @@ export default function App() {
           fetchTranslation({ text, targetLanguage: language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
         )
       ),
-      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
-      shareLatest()
+      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>())
     );
 
     return [
@@ -196,22 +175,14 @@ export default function App() {
         <div className="flex flex-col flex-1 gap-2">
           {transcriptionByDate.size === 0 && "Pres start and say something..."}
           {[...transcriptionByDate.keys()].map((date) => (
-            <div key={+date} className="bg-gray-100 rounded-md p-2">
-              <span style={{ display: "flex", justifyContent: "space-between" }}>
+            <div key={+date} className="bg-gray-100 rounded-md ">
+              <span className="flex justify-between gap-1 border-b border-gray-300 py-2 px-4">
                 [{date.toLocaleTimeString()}]: {transcriptionByDate.get(date)}{" "}
                 <span style={{ cursor: "pointer" }} onClick={() => emitPlayClick(date)}>
                   ▶️
                 </span>
               </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col flex-1 gap-2">
-          {translationByDate.size === 0 && "Translating..."}
-          {[...translationByDate.keys()].map((date) => (
-            <div key={+date} className="bg-gray-100 rounded-md p-2">
-              <span style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="flex justify-between gap-1 py-2 px-4">
                 [{date.toLocaleTimeString()}]: {translationByDate.get(date)}
                 <span style={{ cursor: "pointer" }} onClick={() => emitGenerateAudioClick(date)}>
                   🔊

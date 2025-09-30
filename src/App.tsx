@@ -1,6 +1,6 @@
 import { ChevronDownIcon, CogIcon, LanguageIcon, PlayPauseIcon } from "@heroicons/react/16/solid";
 import { Fragment, useState } from "react";
-import { buffer, concatMap, filter, map, merge, mergeMap, of, scan, startWith, switchMap, withLatestFrom } from "rxjs";
+import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createRecorder } from "./audio/createRecorder";
@@ -9,7 +9,7 @@ import { getRecorderData } from "./audio/getRecorderData";
 import { requestAudioStream } from "./audio/requestAudioStream";
 import { OPEN_AI_API_KEY } from "./config";
 import { generateSpeech } from "./elevenlabs/useTextToSpeech";
-import { fetchTranscription } from "./openAi/fetchTranscription";
+import { fetchTranscription, VerboseJsonResponse } from "./openAi/fetchTranscription";
 import { fetchTranslation } from "./openAi/fetchTranslation";
 import { shareLatest } from "./rxjs/shareLatest";
 import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
@@ -25,13 +25,13 @@ import { Select } from "./ui/select";
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
   const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
-  const [language$, emitLanguage, language] = useBehaviorSubject<"en" | "es" | "ru">("en");
+  const [yourLang$, emitYourLang, yourLang] = useBehaviorSubject<"english" | "spanish" | "russian">("english");
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [playClick$, emitPlayClick] = useSubject<Date>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
 
-  const [transcriptionByDate, setTranscriptions] = useState<Map<Date, string>>(new Map());
+  const [transcriptionByDate, setTranscriptions] = useState<Map<Date, VerboseJsonResponse>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
 
   useSubscriptions(() => {
@@ -75,29 +75,34 @@ export default function App() {
       shareLatest()
     );
 
-    const transcriptions$ = recordedFiles$.pipe(
+    const transcriptions$: Observable<{
+      verboseJson: VerboseJsonResponse;
+      date: Date;
+    }> = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
         merge(
-          of({ text: "...", date }),
-          fetchTranscription({ file, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
+          // of({ text: { text: "...", task: "", lan }, date }),
+          fetchTranscription({ file, apiKey: OPEN_AI_API_KEY, response_format: "verbose_json" }).then((verboseJson) => ({ verboseJson, date }))
         )
       ),
       shareLatest()
     );
 
     const transcriptionsByDate$ = transcriptions$.pipe(
-      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
+      scan((acc, { verboseJson, date }) => acc.set(date, verboseJson), new Map<Date, VerboseJsonResponse>()),
       shareLatest()
     );
 
     const translationsByDate$ = transcriptions$.pipe(
-      withLatestFrom(language$.pipe(startWith("en" as const))),
-      mergeMap(([{ date, text }, language]) =>
-        merge(
-          of({ text: "...", date }),
-          fetchTranslation({ text, targetLanguage: language, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
-        )
-      ),
+      withLatestFrom(yourLang$.pipe(startWith("en" as const))),
+      mergeMap(([{ date, verboseJson }, yourLang]) => {
+        const isTheirLang = verboseJson.language !== yourLang;
+        const translateTo = isTheirLang ? yourLang : verboseJson.language;
+        return merge(
+          // of({ text: "...", date }),
+          fetchTranslation({ text: verboseJson.text, targetLanguage: translateTo, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
+        );
+      }),
       scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
       shareLatest()
     );
@@ -178,7 +183,7 @@ export default function App() {
           </NavbarSection>
         </Navbar>
 
-        <div className="mt-10 flex flex-col items-center z-1">
+        <div className="mt-10 flex flex-col items-center z-1 m-auto max-w-2xl">
           <div className="flex gap-4 p-8">
             <div className="flex flex-col flex-1 gap-2">
               {transcriptionByDate.size === 0 && (
@@ -190,25 +195,28 @@ export default function App() {
                   and say something...
                 </span>
               )}
-              {[...transcriptionByDate.keys()].map((date) => (
-                <div key={+date} className="bg-gray-100 rounded-md">
-                  <span>
-                    <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
-                      <span> {transcriptionByDate.get(date)} </span>
-                      <Button plain onClick={() => emitPlayClick(date)}>
-                        <PlayPauseIcon />
-                      </Button>
+              {[...transcriptionByDate.keys()].map((date) => {
+                const isTheirLang = transcriptionByDate.get(date)?.language !== yourLang;
+                return (
+                  <div key={+date} className={`bg-gray-100 rounded-md ${isTheirLang ? "mr-16" : "ml-16"}`}>
+                    <span>
+                      <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
+                        <span> {transcriptionByDate.get(date)?.text ?? "???"} </span>
+                        <Button plain onClick={() => emitPlayClick(date)}>
+                          <PlayPauseIcon />
+                        </Button>
+                      </span>
+                      <span className="flex justify-between gap-4 py-1 px-6 items-center ">
+                        <span> {translationByDate.get(date)} </span>
+                        <Button plain onClick={() => emitGenerateAudioClick(date)}>
+                          <LanguageIcon />
+                        </Button>
+                      </span>
                     </span>
-                    <span className="flex justify-between gap-4 py-1 px-6 items-center ">
-                      <span> {translationByDate.get(date)} </span>
-                      <Button plain onClick={() => emitGenerateAudioClick(date)}>
-                        <LanguageIcon />
-                      </Button>
-                    </span>
-                  </span>
-                  <span className="px-2 py-1 text-gray-400 text-xs flex justify-end">{date.toLocaleTimeString()}</span>
-                </div>
-              ))}
+                    <span className="px-2 py-1 text-gray-400 text-xs flex justify-end">{date.toLocaleTimeString()}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -229,11 +237,11 @@ export default function App() {
                 <Input type="range" value={sensetivity} onChange={(e) => emitSensetivity(Number.parseInt(e.target.value))} />
               </Field>
               <Field>
-                <Label>Translate to</Label>
-                <Select value={language} onChange={(e) => emitLanguage(e.target.value as "es" | "en" | "ru")}>
-                  <option value="en">English</option>
-                  <option value="es">Spanish</option>
-                  <option value="ru">Russian</option>
+                <Label>You speak</Label>
+                <Select value={yourLang} onChange={(e) => emitYourLang(e.target.value as "english" | "spanish" | "russian")}>
+                  <option value="english">English</option>
+                  <option value="spanish">Spanish</option>
+                  <option value="russian">Russian</option>
                 </Select>
               </Field>
             </FieldGroup>

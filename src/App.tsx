@@ -1,6 +1,6 @@
 import { ChevronDownIcon, CogIcon, LanguageIcon, PlayPauseIcon } from "@heroicons/react/16/solid";
 import { Fragment, useState } from "react";
-import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, startWith, switchMap, withLatestFrom } from "rxjs";
+import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
 import { createListener } from "./audio/createListener";
 import { createRecorder } from "./audio/createRecorder";
@@ -25,7 +25,8 @@ import { Select } from "./ui/select";
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
   const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
-  const [yourLang$, emitYourLang, yourLang] = useBehaviorSubject<"english" | "spanish" | "russian">("english");
+  const [yourLang$, emitYourLang, yourLang] = useBehaviorSubject<"english" | "russian">("english");
+  const [theirLang$, emitTheirLang, theirLang] = useBehaviorSubject<"serbian" | "spanish">("spanish");
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [playClick$, emitPlayClick] = useSubject<Date>();
@@ -94,10 +95,10 @@ export default function App() {
     );
 
     const translationsByDate$ = transcriptions$.pipe(
-      withLatestFrom(yourLang$.pipe(startWith("en" as const))),
-      mergeMap(([{ date, verboseJson }, yourLang]) => {
+      withLatestFrom(yourLang$, theirLang$),
+      mergeMap(([{ date, verboseJson }, yourLang, theirLang]) => {
         const isTheirLang = verboseJson.language !== yourLang;
-        const translateTo = isTheirLang ? yourLang : verboseJson.language;
+        const translateTo = isTheirLang ? yourLang : theirLang;
         return merge(
           // of({ text: "...", date }),
           fetchTranslation({ text: verboseJson.text, targetLanguage: translateTo, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
@@ -198,7 +199,7 @@ export default function App() {
               {[...transcriptionByDate.keys()].map((date) => {
                 const isTheirLang = transcriptionByDate.get(date)?.language !== yourLang;
                 return (
-                  <div key={+date} className={`bg-gray-100 rounded-md ${isTheirLang ? "mr-16" : "ml-16"}`}>
+                  <div key={+date} className={`bg-gray-100 rounded-xl ${isTheirLang ? "mr-16" : "ml-16"}`}>
                     <span>
                       <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
                         <span> {transcriptionByDate.get(date)?.text ?? "???"} </span>
@@ -238,10 +239,16 @@ export default function App() {
               </Field>
               <Field>
                 <Label>You speak</Label>
-                <Select value={yourLang} onChange={(e) => emitYourLang(e.target.value as "english" | "spanish" | "russian")}>
+                <Select value={yourLang} onChange={(e) => emitYourLang(e.target.value as "english" | "russian")}>
                   <option value="english">English</option>
-                  <option value="spanish">Spanish</option>
                   <option value="russian">Russian</option>
+                </Select>
+              </Field>
+              <Field>
+                <Label>They speak</Label>
+                <Select value={theirLang} onChange={(e) => emitTheirLang(e.target.value as "spanish" | "serbian")}>
+                  <option value="spanish">Spanish</option>
+                  <option value="serbian">Serbian</option>
                 </Select>
               </Field>
             </FieldGroup>

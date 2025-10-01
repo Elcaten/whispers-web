@@ -95,8 +95,8 @@ export default function App() {
     );
 
     const translationsByDate$ = transcriptions$.pipe(
-      withLatestFrom(yourLang$, theirLang$),
-      mergeMap(([{ date, verboseJson }, yourLang, theirLang]) => {
+      withLatestFrom(yourLang$),
+      mergeMap(([{ date, verboseJson }, yourLang]) => {
         const isTheirLang = verboseJson.language !== yourLang;
         const translateTo = isTheirLang ? yourLang : theirLang;
         return merge(
@@ -185,10 +185,10 @@ export default function App() {
         </Navbar>
 
         <div className="mt-10 flex flex-col items-center z-1 m-auto max-w-2xl">
-          <div className="flex gap-4 p-8">
+          <div className="flex gap-4 p-8 w-full">
             <div className="flex flex-col flex-1 gap-2">
               {transcriptionByDate.size === 0 && (
-                <span>
+                <span className="text-center">
                   Press
                   <Button className="mx-2" color="green" onClick={() => emitStartRecording()}>
                     Start
@@ -199,7 +199,7 @@ export default function App() {
               {[...transcriptionByDate.keys()].map((date) => {
                 const isTheirLang = transcriptionByDate.get(date)?.language !== yourLang;
                 return (
-                  <div key={+date} className={`bg-gray-100 rounded-xl ${isTheirLang ? "mr-16" : "ml-16"}`}>
+                  <div key={+date} className={`bg-gray-100 rounded-xl ${isTheirLang ? "mr-32" : "ml-32"}`}>
                     <span>
                       <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
                         <span> {transcriptionByDate.get(date)?.text ?? "???"} </span>

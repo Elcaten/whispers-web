@@ -1,4 +1,4 @@
-import { ChevronDownIcon, CogIcon, LanguageIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, CogIcon, LanguageIcon, PlayPauseIcon } from "@heroicons/react/16/solid";
 import { Fragment, useState } from "react";
 import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
@@ -48,6 +48,7 @@ export default function App() {
   const [theirLang$, emitTheirLang, theirLang] = useBehaviorSubject<TheirLang>("spanish");
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
+  const [playClick$, emitPlayClick] = useSubject<Date>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
 
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, VerboseJsonResponse>>(new Map());
@@ -136,6 +137,20 @@ export default function App() {
         listener.stop();
       }),
 
+      playClick$
+        .pipe(
+          withLatestFrom(recoredFileByDate$),
+          switchMap(([date, audioFieByDate]) => {
+            const audioBlob = audioFieByDate.get(date)!;
+            return createAudioPlayer({ audioBlob });
+          }),
+          switchMap((audioPlayer) => audioPlayer.play())
+        )
+        .subscribe({
+          error: (e) => console.error(e),
+          complete: () => console.info("audio playback complete"),
+        }),
+
       generateAudioClick$
         .pipe(
           withLatestFrom(translationsByDate$),
@@ -208,16 +223,18 @@ export default function App() {
                       <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
                         <span> {transcriptionByDate.get(date)?.text ?? "???"} </span>
                         <span className="text-gray-400 text-xs text-nowrap shrink-0">{formatter.format(date)}</span>
+                        <Button plain onClick={() => emitPlayClick(date)}>
+                          <PlayPauseIcon />
+                        </Button>
                       </span>
                       <span className="flex justify-between gap-4 py-1 px-6 items-center ">
                         <span> {translationByDate.get(date)} </span>
-                        {!isTheirLang && (
-                          <Button plain onClick={() => emitGenerateAudioClick(date)}>
-                            <LanguageIcon />
-                          </Button>
-                        )}
+                        <Button plain onClick={() => emitGenerateAudioClick(date)}>
+                          <LanguageIcon />
+                        </Button>
                       </span>
                     </span>
+                    <span className="px-2 py-1 text-gray-400 text-xs flex justify-end">{date.toLocaleTimeString()}</span>
                   </div>
                 );
               })}

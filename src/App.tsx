@@ -27,11 +27,25 @@ const formatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+const YOUR_LANG = {
+  english: "English",
+  spanish: "Spanish",
+  serbian: "Serbian",
+  russian: "Russian",
+};
+type YourLang = keyof typeof YOUR_LANG;
+
+const THEIR_LANG = {
+  spanish: "Spanish",
+  serbian: "Serbian",
+};
+type TheirLang = keyof typeof THEIR_LANG;
+
 export default function App() {
   const [interval$, emitInterval, interval] = useBehaviorSubject(50);
   const [sensetivity$, emitSensetivity, sensetivity] = useBehaviorSubject(70);
-  const [yourLang$, emitYourLang, yourLang] = useBehaviorSubject<"english" | "russian">("english");
-  const [theirLang$, emitTheirLang, theirLang] = useBehaviorSubject<"serbian" | "spanish">("spanish");
+  const [yourLang$, emitYourLang, yourLang] = useBehaviorSubject<YourLang>("english");
+  const [theirLang$, emitTheirLang, theirLang] = useBehaviorSubject<TheirLang>("spanish");
   const [startRecordingClick$, emitStartRecording] = useSubject<void>();
   const [stopRecordingClick$, emitStopRecording] = useSubject<void>();
   const [generateAudioClick$, emitGenerateAudioClick] = useSubject<Date>();
@@ -193,7 +207,7 @@ export default function App() {
                     <span>
                       <span className="flex justify-between items-center gap-4 border-b border-gray-300 py-1 px-6">
                         <span> {transcriptionByDate.get(date)?.text ?? "???"} </span>
-                        <span className="text-gray-400 text-xs flex justify-end">{formatter.format(date)}</span>
+                        <span className="text-gray-400 text-xs text-nowrap shrink-0">{formatter.format(date)}</span>
                       </span>
                       <span className="flex justify-between gap-4 py-1 px-6 items-center ">
                         <span> {translationByDate.get(date)} </span>
@@ -228,16 +242,22 @@ export default function App() {
               </Field>
               <Field>
                 <Label>You speak</Label>
-                <Select value={yourLang} onChange={(e) => emitYourLang(e.target.value as "english" | "russian")}>
-                  <option value="english">English</option>
-                  <option value="russian">Russian</option>
+                <Select value={yourLang} onChange={(e) => emitYourLang(e.target.value as YourLang)}>
+                  {Object.entries(YOUR_LANG).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </Select>
               </Field>
               <Field>
                 <Label>They speak</Label>
-                <Select value={theirLang} onChange={(e) => emitTheirLang(e.target.value as "spanish" | "serbian")}>
-                  <option value="spanish">Spanish</option>
-                  <option value="serbian">Serbian</option>
+                <Select value={theirLang} onChange={(e) => emitTheirLang(e.target.value as TheirLang)}>
+                  {Object.entries(THEIR_LANG).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </Select>
               </Field>
             </FieldGroup>

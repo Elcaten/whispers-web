@@ -99,8 +99,8 @@ export default function App() {
     );
 
     const translationsByDate$ = transcriptions$.pipe(
-      withLatestFrom(yourLang$),
-      mergeMap(([{ date, verboseJson }, yourLang]) => {
+      withLatestFrom(yourLang$, theirLang$),
+      mergeMap(([{ date, verboseJson }, yourLang, theirLang]) => {
         const isTheirLang = verboseJson.language !== yourLang;
         const translateTo = isTheirLang ? yourLang : theirLang;
         return merge(

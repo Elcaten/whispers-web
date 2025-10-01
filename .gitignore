@@ -125,9 +125,3 @@ dist
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.old/App1.tsx
-.old/useWhisper2/configs.ts
-.old/useWhisper2/index.ts
-.old/useWhisper2/lamejs.d.ts
-.old/useWhisper2/types.ts
-.old/useWhisper2/useWhisper.ts

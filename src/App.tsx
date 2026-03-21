@@ -1,8 +1,8 @@
 import { ChevronDownIcon, CogIcon, LanguageIcon, PlayPauseIcon } from "@heroicons/react/16/solid";
 import { Fragment, useState } from "react";
-import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, switchMap, withLatestFrom } from "rxjs";
+import { buffer, concatMap, filter, map, merge, mergeMap, Observable, scan, startWith, switchMap, withLatestFrom } from "rxjs";
 import { createAudioPlayer } from "./audio/createAudioPlayer";
-import { createListener } from "./audio/createListener";
+import { createListener, type Listener } from "./audio/createListener";
 import { createRecorder } from "./audio/createRecorder";
 import { getListenerEvents } from "./audio/getListenerEvents";
 import { getRecorderData } from "./audio/getRecorderData";
@@ -14,7 +14,7 @@ import { fetchTranslation } from "./openAi/fetchTranslation";
 import { shareLatest } from "./rxjs/shareLatest";
 import { useBehaviorSubject } from "./rxjs/useBehaviorSubject";
 import { useSubject } from "./rxjs/useSubject";
-import { useSubscriptions } from "./rxjs/useSubscriptions";
+import { useSubscribeOnMount } from "./rxjs/useSubscribeOnMount";
 import { Button } from "./ui/button";
 import { Dialog, DialogActions, DialogBody, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Field, FieldGroup, Fieldset, Label } from "./ui/fieldset";
@@ -54,31 +54,31 @@ export default function App() {
   const [transcriptionByDate, setTranscriptions] = useState<Map<Date, VerboseJsonResponse>>(new Map());
   const [translationByDate, setTranslations] = useState<Map<Date, string>>(new Map());
 
-  useSubscriptions(() => {
+  useSubscribeOnMount(() => {
     const audioStream$ = startRecordingClick$.pipe(switchMap(requestAudioStream), shareLatest());
 
     const listener$ = audioStream$.pipe(
       withLatestFrom(sensetivity$, interval$),
       switchMap(([stream, sensetivity, interval]) => createListener({ stream, sensetivity, interval })),
-      shareLatest()
+      shareLatest(),
     );
     const stoppedSpeaking$ = listener$.pipe(
       switchMap((listener) => getListenerEvents({ listener })),
       filter((event) => event === "stoppedSpeaking"),
-      shareLatest()
+      shareLatest(),
     );
 
     const recorder$ = audioStream$.pipe(
       switchMap((stream) => createRecorder(stream)),
-      shareLatest()
+      shareLatest(),
     );
     const recordedBlobs$ = recorder$.pipe(
       switchMap((recorder) => getRecorderData(recorder)),
-      shareLatest()
+      shareLatest(),
     );
 
     const recordedFiles$ = recordedBlobs$.pipe(
-      buffer(stoppedSpeaking$),
+      buffer(merge(stoppedSpeaking$, stopRecordingClick$)),
       concatMap(async (encodedBlobs) => {
         const file = new File(encodedBlobs, `${Date.now()}.mp4`, {
           type: "audio/mp4",
@@ -88,11 +88,11 @@ export default function App() {
           date: new Date(),
         };
       }),
-      shareLatest()
+      shareLatest(),
     );
     const recoredFileByDate$ = recordedFiles$.pipe(
-      scan((acc, { file, date }) => acc.set(date, file), new Map<Date, Blob>()),
-      shareLatest()
+      scan((acc, { file, date }) => new Map(acc).set(date, file), new Map<Date, Blob>()),
+      shareLatest(),
     );
 
     const transcriptions$: Observable<{
@@ -100,17 +100,14 @@ export default function App() {
       date: Date;
     }> = recordedFiles$.pipe(
       mergeMap(({ file, date }) =>
-        merge(
-          // of({ text: { text: "...", task: "", lan }, date }),
-          fetchTranscription({ file, apiKey: OPEN_AI_API_KEY, response_format: "verbose_json" }).then((verboseJson) => ({ verboseJson, date }))
-        )
+        fetchTranscription({ file, apiKey: OPEN_AI_API_KEY, response_format: "verbose_json" }).then((verboseJson) => ({ verboseJson, date })),
       ),
-      shareLatest()
+      shareLatest(),
     );
 
     const transcriptionsByDate$ = transcriptions$.pipe(
-      scan((acc, { verboseJson, date }) => acc.set(date, verboseJson), new Map<Date, VerboseJsonResponse>()),
-      shareLatest()
+      scan((acc, { verboseJson, date }) => new Map(acc).set(date, verboseJson), new Map<Date, VerboseJsonResponse>()),
+      shareLatest(),
     );
 
     const translationsByDate$ = transcriptions$.pipe(
@@ -118,24 +115,23 @@ export default function App() {
       mergeMap(([{ date, verboseJson }, yourLang, theirLang]) => {
         const isTheirLang = verboseJson.language !== yourLang;
         const translateTo = isTheirLang ? yourLang : theirLang;
-        return merge(
-          // of({ text: "...", date }),
-          fetchTranslation({ text: verboseJson.text, targetLanguage: translateTo, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }))
-        );
+        return fetchTranslation({ text: verboseJson.text, targetLanguage: translateTo, apiKey: OPEN_AI_API_KEY }).then((text) => ({ text, date }));
       }),
-      scan((acc, { text, date }) => acc.set(date, text), new Map<Date, string>()),
-      shareLatest()
+      scan((acc, { text, date }) => new Map(acc).set(date, text), new Map<Date, string>()),
+      shareLatest(),
     );
 
     return [
       recorder$.subscribe((value) => value.start(1000)),
-      stopRecordingClick$.pipe(withLatestFrom(audioStream$, recorder$, listener$)).subscribe(([_, stream, recorder, listener]) => {
-        for (const track of stream.getTracks()) {
-          track.stop();
-        }
-        recorder.stop();
-        listener.stop();
-      }),
+      stopRecordingClick$
+        .pipe(withLatestFrom(audioStream$, recorder$, listener$.pipe(startWith(null as Listener | null))))
+        .subscribe(([_, stream, recorder, listener]) => {
+          for (const track of stream.getTracks()) {
+            track.stop();
+          }
+          recorder.stop();
+          listener?.stop();
+        }),
 
       playClick$
         .pipe(
@@ -144,7 +140,7 @@ export default function App() {
             const audioBlob = audioFieByDate.get(date)!;
             return createAudioPlayer({ audioBlob });
           }),
-          switchMap((audioPlayer) => audioPlayer.play())
+          switchMap((audioPlayer) => audioPlayer.play()),
         )
         .subscribe({
           error: (e) => console.error(e),
@@ -159,7 +155,7 @@ export default function App() {
           }),
           switchMap((text) => generateSpeech({ text })),
           switchMap((audioBlob) => createAudioPlayer({ audioBlob })),
-          switchMap((player) => player.play())
+          switchMap((player) => player.play()),
         )
         .subscribe({
           error: (e) => console.error(e),

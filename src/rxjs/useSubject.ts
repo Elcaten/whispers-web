@@ -1,13 +1,10 @@
-import { useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Subject } from "rxjs";
-import { useObservable } from "./useObservable";
 
 export function useSubject<T>() {
-  const subject = useRef(new Subject<T>());
-  const value = useObservable(subject.current);
-  const setValue = useCallback(
-    (value: T) => subject.current.next(value),
-    []
-  );
-  return [subject.current.asObservable(), setValue, value] as const;
+  const subjectRef = useRef(new Subject<T>());
+  const stream$ = useMemo(() => subjectRef.current.asObservable(), []);
+  const setValue = useCallback((value: T) => subjectRef.current.next(value), []);
+
+  return [stream$, setValue] as const;
 }

@@ -11,6 +11,7 @@ export function createAudioPlayer(params: { audioBlob: Blob }) {
     return () => {
       console.log(`PLAYER - Destroyed for a blob ${params?.audioBlob?.size}`);
       audio.pause();
+      URL.revokeObjectURL(audioUrl);
     };
   });
 }

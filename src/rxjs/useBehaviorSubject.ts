@@ -1,13 +1,16 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BehaviorSubject } from "rxjs";
-import { useObservable } from "./useObservable";
 
 export function useBehaviorSubject<T>(initialValue: T) {
   const subject$ = useRef(new BehaviorSubject<T>(initialValue));
-  const value = useObservable(subject$.current, initialValue);
-  const setValue = useCallback(
-    (value: T) => subject$.current.next(value),
-    []
-  );
-  return [subject$.current.asObservable(), setValue, value] as const;
+  const [subjectState, setSubjectState] = useState<T | undefined>(initialValue);
+  const stream$ = useMemo(() => subject$.current.asObservable(), []);
+  const setValue = useCallback((value: T) => subject$.current.next(value), []);
+
+  useEffect(() => {
+    const sub = subject$.current.subscribe(setSubjectState);
+    return () => sub.unsubscribe();
+  }, [subject$.current]);
+
+  return [stream$, setValue, subjectState] as const;
 }
